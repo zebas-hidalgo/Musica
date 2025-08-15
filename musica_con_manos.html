@@ -1,0 +1,386 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Música con Manos – MediaPipe + WebAudio (1 archivo)</title>
+<style>
+  :root { --bg:#0f1020; --panel:#1b1e34; --text:#e9ecff; --accent:#8ec5ff; --ok:#36d399; --warn:#ffd166; --bad:#ff6b6b;}
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a1f3a 0%,#0c0f20 55%,#060812 100%);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{padding:14px 16px 0}
+  h1{margin:0 0 6px;font-size:20px;font-weight:700;letter-spacing:.2px}
+  p.small{opacity:.8;margin:.25rem 0 .75rem;font-size:13px}
+  .wrap{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;padding:14px;max-width:1200px;margin:0 auto}
+  .panel{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,.35);overflow:hidden}
+  .panel .head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.15)}
+  .badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
+  .controls{display:grid;gap:10px;padding:12px}
+  label{font-size:13px;opacity:.9}
+  select,input[type=range]{width:100%}
+  button{cursor:pointer;background:linear-gradient(180deg,#3b82f6,#2563eb);border:0;color:white;padding:10px 14px;border-radius:10px;font-weight:700}
+  button.secondary{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
+  .hint{font-size:12px;opacity:.75}
+  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kpi div{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:8px;border-radius:10px;font-size:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .pill{padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.16);font-size:12px}
+  canvas{display:block;width:100%;height:auto;background:#000;aspect-ratio:16/9}
+  video{display:none}
+  .foot{padding:8px 12px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;opacity:.8}
+  .row{display:flex;gap:8px;align-items:center}
+  .flex{display:flex;gap:8px;align-items:center;justify-content:space-between}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎹 Música con Manos (Webcam + MediaPipe Hands)</h1>
+  <p class="small">Abre/cierra la mano para activar/desactivar notas. Sube o baja un dedo extendido para variar el tono. Selector de instrumento incluido.</p>
+</header>
+
+<div class="wrap">
+  <section class="panel">
+    <div class="head flex">
+      <div class="row">
+        <span class="badge">Vista</span>
+        <strong>Detección en tiempo real</strong>
+      </div>
+      <div class="row">
+        <span id="status" class="pill">⏹ Inactivo</span>
+      </div>
+    </div>
+    <canvas id="view" width="1280" height="720"></canvas>
+    <video id="video" playsinline></video>
+    <div class="foot">
+      <div class="legend">
+        <span class="pill">Pulgar → C4</span>
+        <span class="pill">Índice → D4</span>
+        <span class="pill">Medio → E4</span>
+        <span class="pill">Anular → G4</span>
+        <span class="pill">Meñique → A4</span>
+        <span class="pill">↑/↓ dedo = ± semitonos</span>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="head row">
+      <span class="badge">Controles</span><strong>Instrumento y audio</strong>
+    </div>
+    <div class="controls">
+      <div class="row">
+        <button id="start">Iniciar cámara y audio</button>
+        <button id="stop" class="secondary">Detener</button>
+      </div>
+
+      <label>Instrumento</label>
+      <select id="instrument">
+        <option value="piano">Piano</option>
+        <option value="guitarra">Guitarra</option>
+        <option value="violin">Violín</option>
+        <option value="sintetizador">Sintetizador</option>
+      </select>
+
+      <label>Volumen</label>
+      <input id="volume" type="range" min="0" max="1" step="0.01" value="0.6" />
+
+      <label>Umbral de movimiento (semitonos por 0.05 en Y)</label>
+      <input id="sensitivity" type="range" min="0.5" max="3" step="0.1" value="1.2" />
+
+      <div class="kpi">
+        <div>FPS modelo: <span id="fps" class="mono">—</span></div>
+        <div>Latencia aprox.: <span id="lat" class="mono">—</span> ms</div>
+        <div>Manos detectadas: <span id="hands" class="mono">0</span></div>
+        <div>Notas activas: <span id="voices" class="mono">0</span></div>
+      </div>
+      <p class="hint">Consejos: buena luz, manos completas en cuadro. Si la cámara está espejada no afecta el tono.</p>
+    </div>
+  </aside>
+</div>
+
+<!-- ========== Lógica ==========
+  - MediaPipe Hands (Tasks Vision) para landmarks.
+  - Heurística de dedos extendidos: tip.y < pip.y.
+  - Abrir/cerrar mano = media de distancias de puntas ↑/↓ → gate de nota.
+  - Cada dedo mapea a una nota base (C4,D4,E4,G4,A4). Subir/bajar el dedo = ±semitonos.
+  - WebAudio para síntesis con 4 "instrumentos".
+-->
+<script type="module">
+/*** MediaPipe Hands (Tasks Vision) ***/
+import { HandLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10";
+
+const MODEL_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/wasm";
+const MODEL_PATH = MODEL_BASE + "/hand_landmarker.task";
+
+/*** Elements ***/
+const video = document.getElementById('video');
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d', { alpha:false });
+const startBtn = document.getElementById('start');
+const stopBtn  = document.getElementById('stop');
+const instrumentSel = document.getElementById('instrument');
+const volumeSlider = document.getElementById('volume');
+const sensSlider = document.getElementById('sensitivity');
+const statusEl = document.getElementById('status');
+const fpsEl = document.getElementById('fps');
+const latEl = document.getElementById('lat');
+const handsEl = document.getElementById('hands');
+const voicesEl = document.getElementById('voices');
+
+let landmarker, running = false, lastFrameTime = 0, fps = 0;
+
+/*** WebAudio Synth ***/
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audio, masterGain;
+const activeVoices = new Map(); // key -> {osc, gain, ...}
+function ensureAudio(){
+  if (!audio) {
+    audio = new AudioCtx();
+    masterGain = audio.createGain();
+    masterGain.gain.value = +volumeSlider.value;
+    masterGain.connect(audio.destination);
+  }
+}
+volumeSlider.addEventListener('input', ()=> masterGain && (masterGain.gain.value = +volumeSlider.value));
+function midiToFreq(n){ return 440 * Math.pow(2, (n - 69)/12); }
+
+function makeVoice(instr, freq){
+  const o1 = audio.createOscillator();
+  const o2 = audio.createOscillator();
+  const g  = audio.createGain();
+  const f  = audio.createBiquadFilter();
+
+  // base routing
+  o1.connect(g); o2.connect(g); g.connect(f); f.connect(masterGain);
+
+  // Shapes & envelopes por instrumento
+  const now = audio.currentTime;
+  let A=.01,D=.15,S=.7,R=.15; // ADSR por defecto
+  let detune2 = 0, filterType='lowpass', Q=0.7, cutoff = 8000;
+
+  switch(instr){
+    case 'piano':
+      o1.type='sine'; o2.type='triangle'; detune2= +6;
+      A=.005; D=.18; S=.0; R=.2; cutoff=4000; Q=0.9;
+      break;
+    case 'guitarra':
+      o1.type='triangle'; o2.type='square'; detune2= +2;
+      A=.003; D=.25; S=.0; R=.25; filterType='bandpass'; cutoff=2200; Q=1.2;
+      break;
+    case 'violin':
+      o1.type='sawtooth'; o2.type='sawtooth'; detune2= -7;
+      A=.08; D=.2; S=.85; R=.3; cutoff=6000; Q=0.6;
+      // vibrato suave
+      const lfo = audio.createOscillator(); const lfoGain = audio.createGain();
+      lfo.frequency.value = 5.5; lfoGain.gain.value = 7; // cents
+      lfo.connect(lfoGain); lfoGain.connect(o1.detune); lfoGain.connect(o2.detune);
+      lfo.start();
+      g._lfo = lfo; g._lfoGain = lfoGain;
+      break;
+    default: // sintetizador
+      o1.type='square'; o2.type='sawtooth'; detune2= +12;
+      A=.02; D=.12; S=.5; R=.25; cutoff=7000; Q=0.7;
+  }
+
+  o1.frequency.value = freq; o2.frequency.value = freq;
+  o2.detune.value = detune2;
+
+  f.type = filterType; f.frequency.value = cutoff; f.Q.value = Q;
+
+  // ADSR
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(1.0, now + A);
+  g.gain.linearRampToValueAtTime(S, now + A + D);
+
+  o1.start(); o2.start();
+
+  return {o1,o2,gain:g,filter:f,stop:(release=R)=>{
+    const t=audio.currentTime;
+    g.gain.cancelScheduledValues(t);
+    g.gain.setTargetAtTime(0, t, Math.max(0.01, release));
+    setTimeout(()=>{
+      try{ o1.stop(); o2.stop(); g.disconnect(); f.disconnect(); if(g._lfo){g._lfo.stop(); g._lfo.disconnect(); g._lfoGain.disconnect();} }catch(e){}
+    }, (release*1000)+40);
+  }};
+}
+
+/*** Mapping mano→nota ***/
+const FINGER_TIPS = [4,8,12,16,20];     // pulgar..meñique
+const FINGER_PIPS = [3,7,11,15,19];
+const BASE_NOTES  = [60,62,64,67,69];   // C4,D4,E4,G4,A4
+const fingerNames = ['pulgar','indice','medio','anular','meñique'];
+const fingerState = new Map(); // key -> {active,startY,offset}
+function keyFor(handIdx,fingerIdx){ return `${handIdx}:${fingerIdx}`; }
+
+/*** Heurísticas ***/
+function isFingerExtended(landmarks, f){ // simple: tip más arriba que PIP
+  const tip = landmarks[FINGER_TIPS[f]], pip = landmarks[FINGER_PIPS[f]];
+  return tip.y + 0.02 < pip.y; // margen
+}
+function handOpenFactor(landmarks){
+  // promedio de distancia (en px normalizado) de puntas al centro palma (wrist 0)
+  const wrist = landmarks[0];
+  let sum=0;
+  for(const i of FINGER_TIPS){
+    const dx=landmarks[i].x - wrist.x, dy=landmarks[i].y - wrist.y;
+    sum += Math.hypot(dx,dy);
+  }
+  return sum / FINGER_TIPS.length; // ~0.12 cerrada → ~0.22 abierta (aprox)
+}
+
+/*** Cámara + modelo ***/
+let stream;
+async function initModel(){
+  const fileset = await FilesetResolver.forVisionTasks(MODEL_BASE);
+  landmarker = await HandLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: MODEL_PATH },
+    numHands: 2,
+    runningMode: "VIDEO"
+  });
+}
+
+async function start(){
+  ensureAudio();
+  await audio.resume();
+
+  if(!landmarker) await initModel();
+
+  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user", width:{ideal:1280}, height:{ideal:720}}, audio:false});
+  video.srcObject = stream;
+  await video.play();
+  running = true;
+  statusEl.textContent = "⏺ En vivo";
+  statusEl.classList.add('ok'); statusEl.classList.remove('bad');
+  loop();
+}
+
+function stop(){
+  running=false;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null;}
+  video.pause(); video.srcObject=null;
+  statusEl.textContent = "⏹ Inactivo";
+  statusEl.classList.remove('ok');
+  // apaga todas las voces
+  for(const [k,v] of activeVoices){ v.stop(); activeVoices.delete(k); }
+  voicesEl.textContent = '0';
+}
+
+startBtn.onclick = start;
+stopBtn.onclick = stop;
+
+/*** Render + interacción musical ***/
+const drawer = new DrawingUtils(ctx);
+function draw(results){
+  ctx.save();
+  // espejo horizontal para que el movimiento coincida con el usuario
+  ctx.translate(canvas.width,0); ctx.scale(-1,1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.globalAlpha = 0.9;
+
+  for(const landmarks of results.landmarks){
+    drawer.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, {color:"#7aa2ff", lineWidth:3});
+    drawer.drawLandmarks(landmarks, {color:"#ffd166", radius:3.5});
+  }
+  ctx.restore();
+}
+
+let lastPredict = performance.now();
+async function loop(){
+  if(!running) return;
+  const now = performance.now();
+  const t0 = now;
+  const results = landmarker.detectForVideo(video, now);
+  draw(results);
+
+  // KPIs
+  const dt = now - lastFrameTime; lastFrameTime = now;
+  if(dt>0){ fps = (1000/dt*0.2 + fps*0.8) || (1000/dt); }
+  fpsEl.textContent = (fps|0);
+  latEl.textContent = (performance.now()-t0|0);
+  handsEl.textContent = results.landmarks?.length || 0;
+
+  handleMusic(results);
+
+  requestAnimationFrame(loop);
+}
+
+/*** Música basada en landmarks ***/
+function handleMusic(results){
+  const sens = +sensSlider.value; // semitonos por unidad de deltaY (0–1)
+  const instrument = instrumentSel.value;
+  const seenKeys = new Set();
+
+  (results.landmarks || []).forEach((lm, handIdx)=>{
+    const open = handOpenFactor(lm);
+    const isOpen = open > 0.17; // umbral empírico para "mano abierta"
+
+    FINGER_TIPS.forEach((tipIdx, j)=>{
+      const k = keyFor(handIdx,j);
+      const tip = lm[tipIdx];
+
+      const extended = isFingerExtended(lm, j) && isOpen;
+      if(extended){
+        // crear o actualizar voz
+        let st = fingerState.get(k);
+        if(!st){ st = {active:false,startY:tip.y,offset:0}; fingerState.set(k, st); }
+
+        // deltaY hacia arriba (menor y) = subir tono
+        const deltaY = st.startY - tip.y; // arriba positivo
+        const semis = Math.max(-7, Math.min(7, Math.round(deltaY / 0.05 * sens))); // por cada 0.05 en Y ≈ 1*sens semitonos
+        const note = BASE_NOTES[j] + semis;
+
+        if(!st.active){
+          // iniciar
+          st.active = true; st.offset = semis;
+          const freq = midiToFreq(note);
+          const v = makeVoice(instrument, freq);
+          activeVoices.set(k, v);
+        }else{
+          // ajustar frecuencia si cambió semitono
+          if(semis !== st.offset){
+            st.offset = semis;
+            const v = activeVoices.get(k);
+            if(v){
+              const freq = midiToFreq(note);
+              v.o1.frequency.setTargetAtTime(freq, audio.currentTime, 0.01);
+              v.o2.frequency.setTargetAtTime(freq, audio.currentTime, 0.01);
+            }
+          }
+        }
+        seenKeys.add(k);
+      }else{
+        // dedo no activo → apagar voz si existía
+        stopVoice(k);
+        fingerState.delete(k);
+      }
+    });
+  });
+
+  // cualquier voz no vista en este frame se apaga (mano perdida)
+  for(const k of activeVoices.keys()){
+    if(!seenKeys.has(k)) stopVoice(k);
+  }
+  voicesEl.textContent = String(activeVoices.size);
+}
+
+function stopVoice(k){
+  const v = activeVoices.get(k);
+  if(v){ v.stop(); activeVoices.delete(k); }
+}
+
+/*** Guardas rápidas si no hay permisos ***/
+if(!('mediaDevices' in navigator)) {
+  statusEl.textContent = "Tu navegador no permite cámara";
+  statusEl.classList.add('bad');
+}
+
+/*** Ayudas de teclado (demo sin cámara) – opcional
+document.addEventListener('keydown',(e)=>{ if(e.key==='m') instrumentSel.value='sintetizador'; });
+***/
+</script>
+</body>
+</html>
