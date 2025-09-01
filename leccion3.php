@@ -1,0 +1,81 @@
+<?php
+$page_title = "Lección 3: Máscaras de Subred";
+include 'header.php';
+?>
+
+<div class="card">
+    <div class="card-body">
+        <h1 class="card-title"><?php echo $page_title; ?></h1>
+        <p class="lead">Ahora que sabemos qué es una dirección IP, necesitamos una forma de saber qué parte es la red y qué parte es el host.</p>
+
+        <hr>
+
+        <h2>¿Qué es una Máscara de Subred?</h2>
+        <p>Una <strong>máscara de subred</strong> es un número de 32 bits que "enmascara" una dirección IP. Se utiliza para separar el ID de red del ID de host en una dirección IP.</p>
+        <p>La máscara de subred logra esto teniendo todos los bits de la porción de red establecidos en '1' y todos los bits de la porción de host establecidos en '0'.</p>
+
+        <h3 class="mt-4">Notación Decimal y CIDR</h3>
+        <p>Al igual que las direcciones IP, las máscaras de subred se escriben en notación decimal con puntos. Por ejemplo, una máscara común es <code>255.255.255.0</code>.</p>
+        <p>Una forma más moderna y concisa de representar la máscara de subred es la notación <strong>CIDR (Classless Inter-Domain Routing)</strong>. Esta notación simplemente cuenta el número de bits '1' en la máscara y lo añade al final de la dirección IP con una barra inclinada (/).</p>
+
+        <p>Ejemplos:</p>
+        <ul>
+            <li><code>255.255.255.0</code> en binario es <code>11111111.11111111.11111111.00000000</code>. Tiene 24 bits '1', por lo que su notación CIDR es <strong>/24</strong>.</li>
+            <li>Una dirección completa sería <code>192.168.1.1/24</code>.</li>
+            <li><code>255.255.0.0</code> en binario es <code>11111111.11111111.00000000.00000000</code>. Tiene 16 bits '1', por lo que su notación CIDR es <strong>/16</strong>.</li>
+        </ul>
+
+        <div class="alert alert-success">
+            <strong>Recuerda:</strong> El número CIDR (ej. /24) te dice exactamente cuántos bits de la dirección IP pertenecen a la red. El resto de los bits (32 - 24 = 8) pertenecen a los hosts.
+        </div>
+
+        <hr>
+        <h3 class="mt-4">Actividad: Comprueba tu Conocimiento</h3>
+        <div class="accordion" id="activityAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="question1">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#answer1" aria-expanded="false" aria-controls="answer1">
+                        <strong>Pregunta 1:</strong> ¿Qué notación CIDR corresponde a la máscara de subred <code>255.255.255.192</code>?
+                    </button>
+                </h2>
+                <div id="answer1" class="accordion-collapse collapse" aria-labelledby="question1" data-bs-parent="#activityAccordion">
+                    <div class="accordion-body">
+                        <strong>Respuesta:</strong> /26. (La máscara 255.255.255.192 en binario es ...11000000. Tiene 24 + 2 = 26 bits en '1'.)
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="question2">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#answer2" aria-expanded="false" aria-controls="answer2">
+                        <strong>Pregunta 2:</strong> Con una máscara /24, ¿cuántos bits se usan para la red y cuántos para los hosts?
+                    </button>
+                </h2>
+                <div id="answer2" class="accordion-collapse collapse" aria-labelledby="question2" data-bs-parent="#activityAccordion">
+                    <div class="accordion-body">
+                        <strong>Respuesta:</strong> 24 bits para la red y 8 bits para los hosts (32 total - 24 red = 8 host).
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="question3">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#answer3" aria-expanded="false" aria-controls="answer3">
+                        <strong>Pregunta 3:</strong> ¿Una máscara /30 es útil para una red con 5 computadoras?
+                    </button>
+                </h2>
+                <div id="answer3" class="accordion-collapse collapse" aria-labelledby="question3" data-bs-parent="#activityAccordion">
+                    <div class="accordion-body">
+                        <strong>Respuesta:</strong> No. Una máscara /30 solo deja 2 bits para hosts (2<sup>2</sup>=4 direcciones), lo que resulta en solo 2 hosts utilizables. No sería suficiente.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr>
+        <div class="d-flex justify-content-between">
+            <a href="leccion2.php" class="btn btn-secondary">← Lección Anterior</a>
+            <a href="leccion4.php" class="btn btn-primary">Siguiente Lección →</a>
+        </div>
+    </div>
+</div>
+
+<?php include 'footer.php'; ?>
